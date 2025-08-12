@@ -33,8 +33,21 @@ class MihomoSubscriptionGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Mihomo Subscriber")
-        # ===== 缩小窗口尺寸并删除系统标题栏 =====
-        self.root.geometry("750x650")
+        
+        # 获取屏幕尺寸
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        
+        # 设置窗口尺寸
+        window_width = 750
+        window_height = 650
+        
+        # 计算居中位置
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        
+        # 设置窗口位置和大小，实现居中显示
+        self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
         self.root.configure(bg='#f0f0f0')
         self.root.overrideredirect(True)  # 删除系统标题栏
 
@@ -121,7 +134,7 @@ class MihomoSubscriptionGUI:
         self.create_about_tab()
 
     def create_main_tab(self):
-        """创建“主要功能”标签页的组件。"""
+        """创建"主要功能"标签页的组件。"""
         settings_frame = tk.LabelFrame(self.main_tab, text="⚙️ 设置",
                                        font=('微软雅黑', 9, 'bold'),
                                        bg='#f0f0f0', fg='#2c3e50')
@@ -202,7 +215,7 @@ class MihomoSubscriptionGUI:
         self.log_text.pack(fill='both', expand=True, padx=8, pady=6)
 
     def create_files_tab(self):
-        """创建“文件管理”标签页的组件。"""
+        """创建"文件管理"标签页的组件。"""
         # 顶部路径和按钮区域
         path_frame = tk.Frame(self.files_tab, bg='#f0f0f0')
         path_frame.pack(fill='x', padx=8, pady=6)
@@ -256,7 +269,7 @@ class MihomoSubscriptionGUI:
         self.preview_text.pack(fill='both', expand=True, padx=8, pady=6)
 
     def create_about_tab(self):
-        """创建“关于”标签页的组件和内容。"""
+        """创建"关于"标签页的组件和内容。"""
         # 滚动容器
         container = tk.Frame(self.about_tab, bg='#f0f0f0')
         container.pack(fill='both', expand=True)
@@ -284,7 +297,7 @@ class MihomoSubscriptionGUI:
         inner.columnconfigure(0, weight=1)
         
         # 标题
-        title_lbl = tk.Label(inner, text="🚀 Mihomo Subscriber\nVersion 2.0.0",
+        title_lbl = tk.Label(inner, text="🚀 Mihomo Subscriber\nVersion 1.0.0",
                              font=('微软雅黑', 16, 'bold'), bg='#2c3e50', fg='white',
                              justify='center', pady=15)
         title_lbl.grid(row=0, column=0, sticky='ew', pady=(0, 15))
