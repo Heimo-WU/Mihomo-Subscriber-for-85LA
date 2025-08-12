@@ -1,0 +1,27 @@
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 缓存文件
+__pycache__/
+*.pyc
+
+# 打包工具生成的文件和目录
+# PyInstaller
+build/
+dist/
+*.spec
+
+# 其他临时文件
+*.log
+*.sqlite3
+*.ico
+
+# pip安装的包信息
+*.dist-info/
+*.egg-info/
+
+# 操作系统特定文件
+.DS_Store
+Thumbs.db
