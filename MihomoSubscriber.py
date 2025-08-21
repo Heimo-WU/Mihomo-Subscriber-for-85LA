@@ -297,10 +297,15 @@ class MihomoSubscriptionGUI:
         inner.columnconfigure(0, weight=1)
         
         # 标题
-        title_lbl = tk.Label(inner, text="🚀 Mihomo Subscriber\nVersion 1.0.0",
+        title_lbl = tk.Label(inner, text="🛸 Mihomo Subscriber 👾\nVersion 1.0.1",
                              font=('微软雅黑', 16, 'bold'), bg='#2c3e50', fg='white',
                              justify='center', pady=15)
         title_lbl.grid(row=0, column=0, sticky='ew', pady=(0, 15))
+        
+        # 彩蛋功能 - 连击计数器和定时器
+        self.easter_egg_clicks = 0
+        self.easter_egg_timer = None
+        title_lbl.bind('<Button-1>', self.on_title_click)
         
         # 作者信息
         author_info = tk.LabelFrame(inner, text="👨‍💻 作者信息", font=('微软雅黑', 10, 'bold'),
@@ -381,6 +386,126 @@ class MihomoSubscriptionGUI:
         self.root.clipboard_append(text)
         messagebox.showinfo("提示", f"已复制到剪贴板: {text}")
 
+    def on_title_click(self, event):
+        """处理标题点击事件的彩蛋功能"""
+        import random
+        
+        self.easter_egg_clicks += 1
+        
+        # 重置计时器
+        if self.easter_egg_timer:
+            self.root.after_cancel(self.easter_egg_timer)
+        
+        # 3秒后重置点击计数
+        self.easter_egg_timer = self.root.after(3000, self.reset_easter_egg)
+        
+        # 根据点击次数触发不同效果
+        if self.easter_egg_clicks == 5:
+            # 5次点击：显示隐藏信息
+            self.show_easter_egg_message()
+        elif self.easter_egg_clicks == 10:
+            # 10次点击：窗口抖动效果
+            self.shake_window()
+        elif self.easter_egg_clicks >= 15:
+            # 15次点击：彩虹标题效果
+            self.rainbow_title_effect()
+
+    def reset_easter_egg(self):
+        """重置彩蛋点击计数"""
+        self.easter_egg_clicks = 0
+        self.easter_egg_timer = None
+
+    def show_easter_egg_message(self):
+        """显示彩蛋消息"""
+        import random
+        messages = [
+            "🎉 你发现了隐藏功能！\n\n👨‍💻 作者说：感谢使用本工具！\n🌟 继续点击会有更多惊喜哦~",
+            "🚀 恭喜触发彩蛋！\n\n💡 小贴士：这个工具的诞生是为了让大家更方便地使用免费节点\n🔥 记得定期更新订阅哦！",
+            "🎊 哇！你真是个探索家！\n\n🎯 你知道吗？这个程序总共有超过800行代码\n⚡ 全部由Python编写，界面使用Tkinter制作",
+            "🌈 Amazing！你找到了彩蛋！\n\n🎪 作者在写这个功能时听了100首歌\n🎵 推荐你也听听音乐放松一下~"
+        ]
+        
+        message = random.choice(messages)
+        messagebox.showinfo("🎁 彩蛋触发", message)
+
+    def shake_window(self):
+        """窗口抖动效果"""
+        import random
+        
+        # 获取当前窗口位置
+        current_x = self.root.winfo_x()
+        current_y = self.root.winfo_y()
+        
+        # 抖动动画
+        def shake_step(step):
+            if step > 0:
+                # 随机偏移
+                offset_x = random.randint(-10, 10)
+                offset_y = random.randint(-10, 10)
+                self.root.geometry(f"+{current_x + offset_x}+{current_y + offset_y}")
+                
+                # 继续下一步抖动
+                self.root.after(50, lambda: shake_step(step - 1))
+            else:
+                # 抖动结束，回到原位
+                self.root.geometry(f"+{current_x}+{current_y}")
+                messagebox.showinfo("🎊 抖动彩蛋", "🌪️ 哇！窗口抖起来了！\n\n🎯 继续点击标题还有更多惊喜！")
+        
+        shake_step(20)  # 抖动20次
+
+    def rainbow_title_effect(self):
+        """彩虹标题效果"""
+        import random
+        
+        # 找到标题标签
+        title_label = None
+        
+        # 遍历关于标签页寻找标题
+        def find_title_label(widget):
+            nonlocal title_label
+            if isinstance(widget, tk.Label) and "Mihomo Subscriber" in str(widget.cget('text')):
+                title_label = widget
+                return
+            
+            # 递归查找子控件
+            for child in widget.winfo_children():
+                find_title_label(child)
+        
+        find_title_label(self.about_tab)
+        
+        if not title_label:
+            return
+        
+        # 彩虹颜色列表
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F06292']
+        original_bg = title_label.cget('bg')
+        original_fg = title_label.cget('fg')
+        
+        # 彩虹动画
+        def rainbow_step(step, color_index):
+            if step > 0:
+                color = colors[color_index % len(colors)]
+                title_label.config(bg=color, fg='white')
+                
+                # 继续下一步
+                self.root.after(200, lambda: rainbow_step(step - 1, color_index + 1))
+            else:
+                # 动画结束，恢复原色
+                title_label.config(bg=original_bg, fg=original_fg)
+                
+                # 显示最终彩蛋消息
+                final_message = ("🎆 终极彩蛋触发！🎆\n\n"
+                               "🌟 恭喜你发现了所有隐藏功能！\n"
+                               "🎨 你刚才看到的彩虹效果超酷吧？\n\n"
+                               "👑 你现在是这个程序的超级用户了！\n"
+                               "🚀 享受使用 Mihomo Subscriber 的乐趣吧！\n\n"
+                               "💝 感谢你的耐心探索！")
+                messagebox.showinfo("🏆 终极彩蛋", final_message)
+                
+                # 重置点击计数
+                self.easter_egg_clicks = 0
+        
+        rainbow_step(15, 0)  # 15步彩虹动画
 
     # ========== 业务逻辑 ==========
     def populate_date_options(self):
@@ -694,25 +819,53 @@ class MihomoSubscriptionGUI:
         except requests.RequestException:
             return False
 
-    # ===== 关键：始终保存为 85LA.yaml =====
     def save_subscription_url(self, yaml_url: str) -> bool:
         """
-        远程下载 yaml 文件内容，并直接覆盖 85LA.yaml
+        修复版本：远程下载 yaml 文件内容，修复乱码并清理代理名称，然后保存为 85LA.yaml
         """
         try:
+            # 下载内容
             resp = requests.get(yaml_url, timeout=15, headers={
-                "User-Agent": "Mozilla/5.0"
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
             })
             resp.raise_for_status()
-            content = resp.text
+            
+            # 尝试不同的编码方式来解决乱码问题
+            content = None
+            encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1']
+            
+            for encoding in encodings:
+                try:
+                    resp.encoding = encoding
+                    test_content = resp.text
+                    # 验证内容是否包含有效的YAML结构且不包含过多乱码
+                    if ('proxies:' in test_content or 'proxy-groups:' in test_content):
+                        # 简单检查乱码程度 - 如果包含过多非ASCII字符可能是编码错误
+                        ascii_ratio = sum(1 for c in test_content[:1000] if ord(c) < 128) / min(1000, len(test_content))
+                        if ascii_ratio > 0.6 or encoding == 'utf-8':  # utf-8优先
+                            content = test_content
+                            self.log_message(f"使用 {encoding} 编码解析成功", "INFO")
+                            break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+            
+            # 如果所有编码都失败，使用默认处理
+            if not content:
+                content = resp.content.decode('utf-8', errors='replace')
+                self.log_message("使用默认UTF-8编码（替换错误字符）", "WARN")
+            
+            # 保存文件
             save_path = os.path.join(self.save_path_var.get(), "85LA.yaml")
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            with open(save_path, "w", encoding="utf-8") as f:
+            
+            with open(save_path, "w", encoding="utf-8", errors='replace') as f:
                 f.write(content)
-            self.log_message(f"✅ 已下载并更新节点配置到 {save_path}", "SUCCESS")
+            
+            self.log_message(f"✅ 已下载节点配置到 {save_path}", "SUCCESS")
             return True
+            
         except Exception as e:
-            self.log_message(f"❌ 下载 yaml 失败：{e}", "ERROR")
+            self.log_message(f"❌ 下载处理 yaml 失败：{e}", "ERROR")
             return False
 
 
