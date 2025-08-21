@@ -297,7 +297,7 @@ class MihomoSubscriptionGUI:
         inner.columnconfigure(0, weight=1)
         
         # 标题
-        title_lbl = tk.Label(inner, text="🛸 Mihomo Subscriber 👾\nVersion 1.0.1",
+        title_lbl = tk.Label(inner, text="🛸 Mihomo Subscriber 👾\nVersion 1.0.2",
                              font=('微软雅黑', 16, 'bold'), bg='#2c3e50', fg='white',
                              justify='center', pady=15)
         title_lbl.grid(row=0, column=0, sticky='ew', pady=(0, 15))
@@ -388,8 +388,6 @@ class MihomoSubscriptionGUI:
 
     def on_title_click(self, event):
         """处理标题点击事件的彩蛋功能"""
-        import random
-        
         self.easter_egg_clicks += 1
         
         # 重置计时器
@@ -399,34 +397,29 @@ class MihomoSubscriptionGUI:
         # 3秒后重置点击计数
         self.easter_egg_timer = self.root.after(3000, self.reset_easter_egg)
         
-        # 根据点击次数触发不同效果
-        if self.easter_egg_clicks == 5:
-            # 5次点击：显示隐藏信息
-            self.show_easter_egg_message()
-        elif self.easter_egg_clicks == 10:
-            # 10次点击：窗口抖动效果
-            self.shake_window()
-        elif self.easter_egg_clicks >= 15:
-            # 15次点击：彩虹标题效果
+        # 每次点击都有视觉反馈
+        self.title_flash_effect(event.widget)
+        
+        # 达到15次点击触发彩蛋
+        if self.easter_egg_clicks >= 15:
+            # 并行触发彩虹效果和抖动动画
             self.rainbow_title_effect()
+            self.shake_window()
+
+    def title_flash_effect(self, title_widget):
+        """标题闪烁效果"""
+        original_bg = title_widget.cget('bg')
+        
+        # 闪烁
+        title_widget.config(bg="#8F00FF")
+        
+        # 150毫秒后恢复原色
+        self.root.after(150, lambda: title_widget.config(bg=original_bg))
 
     def reset_easter_egg(self):
         """重置彩蛋点击计数"""
         self.easter_egg_clicks = 0
         self.easter_egg_timer = None
-
-    def show_easter_egg_message(self):
-        """显示彩蛋消息"""
-        import random
-        messages = [
-            "🎉 你发现了隐藏功能！\n\n👨‍💻 作者说：感谢使用本工具！\n🌟 继续点击会有更多惊喜哦~",
-            "🚀 恭喜触发彩蛋！\n\n💡 小贴士：这个工具的诞生是为了让大家更方便地使用免费节点\n🔥 记得定期更新订阅哦！",
-            "🎊 哇！你真是个探索家！\n\n🎯 你知道吗？这个程序总共有超过800行代码\n⚡ 全部由Python编写，界面使用Tkinter制作",
-            "🌈 Amazing！你找到了彩蛋！\n\n🎪 作者在写这个功能时听了100首歌\n🎵 推荐你也听听音乐放松一下~"
-        ]
-        
-        message = random.choice(messages)
-        messagebox.showinfo("🎁 彩蛋触发", message)
 
     def shake_window(self):
         """窗口抖动效果"""
@@ -449,14 +442,11 @@ class MihomoSubscriptionGUI:
             else:
                 # 抖动结束，回到原位
                 self.root.geometry(f"+{current_x}+{current_y}")
-                messagebox.showinfo("🎊 抖动彩蛋", "🌪️ 哇！窗口抖起来了！\n\n🎯 继续点击标题还有更多惊喜！")
         
         shake_step(20)  # 抖动20次
 
     def rainbow_title_effect(self):
         """彩虹标题效果"""
-        import random
-        
         # 找到标题标签
         title_label = None
         
@@ -477,7 +467,7 @@ class MihomoSubscriptionGUI:
             return
         
         # 彩虹颜色列表
-        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F06292']
+        colors = ['#FF6B6B', '#FF8C00', '#FFEAA7', '#27AE60', '#4ECDC4', '#45B7D1', '#9B59B6']
         original_bg = title_label.cget('bg')
         original_fg = title_label.cget('fg')
         
@@ -492,15 +482,6 @@ class MihomoSubscriptionGUI:
             else:
                 # 动画结束，恢复原色
                 title_label.config(bg=original_bg, fg=original_fg)
-                
-                # 显示最终彩蛋消息
-                final_message = ("🎆 终极彩蛋触发！🎆\n\n"
-                               "🌟 恭喜你发现了所有隐藏功能！\n"
-                               "🎨 你刚才看到的彩虹效果超酷吧？\n\n"
-                               "👑 你现在是这个程序的超级用户了！\n"
-                               "🚀 享受使用 Mihomo Subscriber 的乐趣吧！\n\n"
-                               "💝 感谢你的耐心探索！")
-                messagebox.showinfo("🏆 终极彩蛋", final_message)
                 
                 # 重置点击计数
                 self.easter_egg_clicks = 0

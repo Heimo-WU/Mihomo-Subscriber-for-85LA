@@ -17,6 +17,7 @@ dist/
 *.log
 *.sqlite3
 *.ico
+*.png
 
 # pip安装的包信息
 *.dist-info/
