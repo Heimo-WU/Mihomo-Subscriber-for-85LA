@@ -17,6 +17,7 @@ dist/
 *.log
 *.sqlite3
 *.ico
+*.png
 
 # pip安装的包信息
 *.dist-info/
@@ -25,3 +26,4 @@ dist/
 # 操作系统特定文件
 .DS_Store
 Thumbs.db
+
