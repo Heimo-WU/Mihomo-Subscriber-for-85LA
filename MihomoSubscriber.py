@@ -1,6 +1,5 @@
 import re
 import os
-import glob
 import time
 import logging
 import threading
@@ -24,7 +23,223 @@ BASE_URL = "https://www.85la.com/"
 TIMEOUT = 15
 RETRY = 3
 
+# 日志管理
+class MihomoLogger:
+    def __init__(self, save_dir):
+        log_file = os.path.join(save_dir, "mihomo_auto.log")
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[logging.FileHandler(log_file, encoding='utf-8'),
+                      logging.StreamHandler()]
+        )
+        self.logger = logging.getLogger(__name__)
 
+    def log(self, message, level='INFO'):
+        getattr(self.logger, level.lower(), self.logger.info)(message)
+
+# 网络请求与解析
+class MihomoNetwork:
+    def __init__(self, base_url, timeout, retry, logger, is_running_func):
+        self.base_url = base_url
+        self.timeout = timeout
+        self.retry = retry
+        self.logger = logger
+        self.is_running = is_running_func
+
+    def make_request(self, url, retries=None):
+        """
+        封装的HTTP GET请求方法，包含重试和超时逻辑。
+        """
+        if retries is None:
+            retries = self.retry
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+        for attempt in range(retries):
+            if not self.is_running():
+                return None
+            try:
+                resp = requests.get(url, timeout=self.timeout, headers=headers)
+                resp.raise_for_status()
+                resp.encoding = 'utf-8'
+                return resp
+            except requests.RequestException as e:
+                self.logger.log(f"请求失败 (尝试 {attempt + 1}/{retries}): {e}", "WARN")
+                if attempt < retries - 1:
+                    time.sleep(2 ** attempt)
+        return None
+
+    @staticmethod
+    def get_date_formats(target_date):
+        """返回可能的日期格式列表，用于匹配文章标题."""
+        return [
+            f"{target_date.year}年{target_date.month}月{target_date.day}日",
+            f"{target_date.year}/{target_date.month}/{target_date.day}",
+            f"{target_date.year}-{target_date.month:02d}-{target_date.day:02d}",
+            target_date.strftime("%Y年%m月%d日"),
+        ]
+
+    def find_post_by_date(self, target_date):
+        """
+        在首页查找指定日期的文章链接。
+        """
+        try:
+            resp = self.make_request(self.base_url)
+            if not resp:
+                return None
+            soup = BeautifulSoup(resp.text, "html.parser")
+            date_formats = self.get_date_formats(target_date)
+            for h2 in soup.find_all("h2", class_="qzdy-title"):
+                title_text = h2.get_text()
+                for fmt in date_formats:
+                    if fmt in title_text and "免费节点" in title_text:
+                        link = h2.find("a")
+                        if link and link.get("href"):
+                            full_url = link["href"]
+                            if not full_url.startswith("http"):
+                                full_url = self.base_url.rstrip("/") + full_url
+                            return full_url
+            return None
+        except Exception as e:
+            self.logger.log(f"查找文章失败: {e}", "ERROR")
+            return None
+
+    def extract_mihomo_urls(self, post_url):
+        """
+        从文章页面提取 Mihomo 订阅链接。
+        使用多个正则表达式和上下文过滤来确保准确性。
+        """
+        try:
+            resp = self.make_request(post_url)
+            if not resp:
+                return []
+            content = resp.text
+            patterns = [
+                r'https://[^\s<>"\'\)]*mihomo[^\s<>"\'\)]*\.ya?ml',
+                r'(?i)(?:clash\.?mihomo|mihomo).*?订阅.*?(?:地址|链接).*?(https://[^\s<>"\'\)]+\.ya?ml)',
+            ]
+            found_urls = set()
+            for pattern in patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE | re.DOTALL)
+                for match in matches:
+                    url = match[0] if isinstance(match, tuple) else match
+                    found_urls.add(url)
+            
+            # 如果没找到特定的mihomo链接，尝试查找所有yaml链接并进行上下文过滤
+            if not found_urls:
+                all_yaml_pattern = r'https://www\.85la\.com/wp-content/uploads/[^\s<>"\'\)]+\.ya?ml'
+                all_yamls = re.findall(all_yaml_pattern, content, re.IGNORECASE)
+                for url in all_yamls:
+                    url_index = content.find(url)
+                    if url_index != -1:
+                        start = max(0, url_index - 300)
+                        end = min(len(content), url_index + len(url) + 300)
+                        context = content[start:end].lower()
+                        # 确保上下文中包含 'mihomo' 且不包含 'clash.meta'
+                        if 'mihomo' in context and 'clash.meta' not in context:
+                            found_urls.add(url)
+            
+            filtered_urls = []
+            for url in found_urls:
+                url_index = content.find(url)
+                if url_index != -1:
+                    start = max(0, url_index - 200)
+                    end = min(len(content), url_index + len(url) + 200)
+                    context = content[start:end].lower()
+                    # 再次过滤，排除可能被误判的clash.meta链接
+                    if 'clash.meta' in context and 'mihomo' not in context:
+                        self.logger.log(f"排除 Clash.meta 链接: {url}")
+                        continue
+                    filtered_urls.append(url)
+            return filtered_urls
+        except Exception as e:
+            self.logger.log(f"提取 Mihomo 链接失败: {e}", "ERROR")
+            return []
+
+    def validate_yaml_url(self, url):
+        """
+        通过HEAD请求验证URL是否可访问。
+        """
+        try:
+            # 使用 HEAD 请求，更快且不下载整个文件
+            resp = requests.head(url, timeout=10, allow_redirects=True)
+            return resp.status_code == 200
+        except requests.RequestException:
+            return False
+
+# 文件管理
+class MihomoFileManager:
+    def __init__(self, save_dir, logger):
+        self.save_dir = save_dir
+        self.logger = logger
+
+    def save_subscription_url(self, yaml_url):
+        """
+        修复版本：远程下载 yaml 文件内容，修复乱码并清理代理名称，然后保存为 85LA.yaml
+        """
+        try:
+            # 下载内容
+            resp = requests.get(yaml_url, timeout=15, headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            })
+            resp.raise_for_status()
+            
+            # 尝试不同的编码方式来解决乱码问题
+            content = None
+            encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1']
+            
+            for encoding in encodings:
+                try:
+                    resp.encoding = encoding
+                    test_content = resp.text
+                    # 验证内容是否包含有效的YAML结构且不包含过多乱码
+                    if ('proxies:' in test_content or 'proxy-groups:' in test_content):
+                        # 简单检查乱码程度 - 如果包含过多非ASCII字符可能是编码错误
+                        ascii_ratio = sum(1 for c in test_content[:1000] if ord(c) < 128) / min(1000, len(test_content))
+                        if ascii_ratio > 0.6 or encoding == 'utf-8':  # utf-8优先
+                            content = test_content
+                            self.logger.log(f"使用 {encoding} 编码解析成功", "INFO")
+                            break
+                except (UnicodeDecodeError, UnicodeError):
+                    continue
+            
+            # 如果所有编码都失败，使用默认处理
+            if not content:
+                content = resp.content.decode('utf-8', errors='replace')
+                self.logger.log("使用默认UTF-8编码（替换错误字符）", "WARN")
+            
+            # 保存文件
+            save_path = os.path.join(self.save_dir, "85LA.yaml")
+            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+            
+            with open(save_path, "w", encoding="utf-8", errors='replace') as f:
+                f.write(content)
+            
+            self.logger.log(f"✅ 已下载节点配置到 {save_path}", "SUCCESS")
+            return True
+            
+        except Exception as e:
+            self.logger.log(f"❌ 下载处理 yaml 失败：{e}", "ERROR")
+            return False
+
+    def get_yaml_file_path(self):
+        return os.path.join(self.save_dir, "85LA.yaml")
+
+    def list_yaml_files(self):
+        # 只返回85LA.yaml
+        file_path = self.get_yaml_file_path()
+        if os.path.isfile(file_path):
+            return [file_path]
+        return []
+
+    def read_file_content(self, file_path):
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+
+# 主GUI
 class MihomoSubscriptionGUI:
     """
     一个用于自动查找和下载 Mihomo 订阅的 GUI 应用程序。
@@ -56,7 +271,12 @@ class MihomoSubscriptionGUI:
         self.RETRY_COUNT = RETRY
         self.DEFAULT_SAVE_DIR = SAVE_DIR
         os.makedirs(self.DEFAULT_SAVE_DIR, exist_ok=True)
-        self.setup_logging()
+        self.logger = MihomoLogger(self.DEFAULT_SAVE_DIR)
+        self.network = MihomoNetwork(
+            BASE_URL, TIMEOUT, RETRY,
+            self.logger, lambda: self.is_running
+        )
+        self.file_manager = MihomoFileManager(self.DEFAULT_SAVE_DIR, self.logger)
         self.create_widgets()
         self.is_running = False
         self.search_thread = None
@@ -87,17 +307,6 @@ class MihomoSubscriptionGUI:
         x = self.root.winfo_x() + deltax
         y = self.root.winfo_y() + deltay
         self.root.geometry(f"+{x}+{y}")
-
-    def setup_logging(self):
-        """配置日志记录器，同时输出到文件和控制台。"""
-        log_file = os.path.join(self.DEFAULT_SAVE_DIR, "mihomo_auto.log")
-        logging.basicConfig(
-            level=logging.INFO,
-            format='%(asctime)s - %(levelname)s - %(message)s',
-            handlers=[logging.FileHandler(log_file, encoding='utf-8'),
-                      logging.StreamHandler()]
-        )
-        self.logger = logging.getLogger(__name__)
 
     # ========== UI 创建（统一缩小字体/间距） ==========
     def create_widgets(self):
@@ -518,6 +727,7 @@ class MihomoSubscriptionGUI:
         timestamp = datetime.now().strftime("%H:%M:%S")
         formatted_msg = f"[{timestamp}] {level}: {message}\n"
         self.root.after(0, lambda: self.update_log_display(formatted_msg))
+        self.logger.log(message, level)
 
     def update_log_display(self, msg):
         """将日志消息添加到日志文本框并滚动到底部。"""
@@ -564,14 +774,14 @@ class MihomoSubscriptionGUI:
                     return
                 current_target_date = datetime.now() - timedelta(days=i)
                 self.log_message(f"尝试查找 {current_target_date.strftime('%Y年%m月%d日')} 的文章...")
-                post_url = self.find_post_by_date(current_target_date)
+                post_url = self.network.find_post_by_date(current_target_date)
                 
                 if not post_url:
                     self.log_message(f"未找到 {current_target_date.strftime('%Y年%m月%d日')} 的文章，继续回溯...", "WARN")
                     continue
                 
                 self.log_message(f"找到文章: {post_url}")
-                mihomo_urls = self.extract_mihomo_urls(post_url)
+                mihomo_urls = self.network.extract_mihomo_urls(post_url)
                 
                 if not mihomo_urls:
                     self.log_message("未找到 Mihomo 订阅链接，继续回溯...", "WARN")
@@ -583,14 +793,14 @@ class MihomoSubscriptionGUI:
                     if not self.is_running:
                         return
                     self.log_message(f"验证链接 {idx+1}/{len(mihomo_urls)}: {url[:50]}...")
-                    if self.validate_yaml_url(url):
+                    if self.network.validate_yaml_url(url):
                         valid_urls.append(url)
                         self.root.after(0, lambda u=url, i=idx: self.add_result_item(f"Mihomo {i+1}", "✅ 有效", u))
                     else:
                         self.root.after(0, lambda u=url, i=idx: self.add_result_item(f"Mihomo {i+1}", "❌ 无效", u))
                 
                 if valid_urls:
-                    self.save_subscription_url(valid_urls[0])
+                    self.file_manager.save_subscription_url(valid_urls[0])
                     self.log_message(f"Mihomo 订阅更新完成！", "SUCCESS")
                     self.root.after(0, self.refresh_files)
                     self.root.after(0, lambda: messagebox.showinfo("成功",
@@ -669,8 +879,7 @@ class MihomoSubscriptionGUI:
     def show_file_content(self, file_path):
         """在预览框中显示指定文件的内容。"""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                content = f.read()
+            content = self.file_manager.read_file_content(file_path)
             self.preview_text.delete(1.0, tk.END)
             self.preview_text.insert(1.0, content)
             self.notebook.select(self.files_tab)
@@ -678,178 +887,6 @@ class MihomoSubscriptionGUI:
             messagebox.showerror("错误", f"无法读取文件: {e}")
 
     # ========== 网络与解析 ==========
-    def get_date_formats(self, target_date):
-        """返回可能的日期格式列表，用于匹配文章标题。"""
-        return [
-            f"{target_date.year}年{target_date.month}月{target_date.day}日",
-            f"{target_date.year}/{target_date.month}/{target_date.day}",
-            f"{target_date.year}-{target_date.month:02d}-{target_date.day:02d}",
-            target_date.strftime("%Y年%m月%d日"),
-        ]
-
-    def make_request(self, url, retries=None):
-        """
-        封装的HTTP GET请求方法，包含重试和超时逻辑。
-        """
-        if retries is None:
-            retries = self.RETRY_COUNT
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-        }
-        for attempt in range(retries):
-            if not self.is_running:
-                return None
-            try:
-                resp = requests.get(url, timeout=self.TIMEOUT, headers=headers)
-                resp.raise_for_status()
-                resp.encoding = 'utf-8'
-                return resp
-            except requests.RequestException as e:
-                self.log_message(f"请求失败 (尝试 {attempt + 1}/{retries}): {e}", "WARN")
-                if attempt < retries - 1:
-                    time.sleep(2 ** attempt)
-        return None
-
-    def find_post_by_date(self, target_date):
-        """
-        在首页查找指定日期的文章链接。
-        """
-        try:
-            resp = self.make_request(self.BASE_URL)
-            if not resp:
-                return None
-            soup = BeautifulSoup(resp.text, "html.parser")
-            date_formats = self.get_date_formats(target_date)
-            for h2 in soup.find_all("h2", class_="qzdy-title"):
-                title_text = h2.get_text()
-                for fmt in date_formats:
-                    if fmt in title_text and "免费节点" in title_text:
-                        link = h2.find("a")
-                        if link and link.get("href"):
-                            full_url = link["href"]
-                            if not full_url.startswith("http"):
-                                full_url = self.BASE_URL.rstrip("/") + full_url
-                            return full_url
-            return None
-        except Exception as e:
-            self.log_message(f"查找文章失败: {e}", "ERROR")
-            return None
-
-    def extract_mihomo_urls(self, post_url):
-        """
-        从文章页面提取 Mihomo 订阅链接。
-        使用多个正则表达式和上下文过滤来确保准确性。
-        """
-        try:
-            resp = self.make_request(post_url)
-            if not resp:
-                return []
-            content = resp.text
-            patterns = [
-                r'https://[^\s<>"\'\)]*mihomo[^\s<>"\'\)]*\.ya?ml',
-                r'(?i)(?:clash\.?mihomo|mihomo).*?订阅.*?(?:地址|链接).*?(https://[^\s<>"\'\)]+\.ya?ml)',
-            ]
-            found_urls = set()
-            for pattern in patterns:
-                matches = re.findall(pattern, content, re.IGNORECASE | re.DOTALL)
-                for match in matches:
-                    url = match[0] if isinstance(match, tuple) else match
-                    found_urls.add(url)
-            
-            # 如果没找到特定的mihomo链接，尝试查找所有yaml链接并进行上下文过滤
-            if not found_urls:
-                all_yaml_pattern = r'https://www\.85la\.com/wp-content/uploads/[^\s<>"\'\)]+\.ya?ml'
-                all_yamls = re.findall(all_yaml_pattern, content, re.IGNORECASE)
-                for url in all_yamls:
-                    url_index = content.find(url)
-                    if url_index != -1:
-                        start = max(0, url_index - 300)
-                        end = min(len(content), url_index + len(url) + 300)
-                        context = content[start:end].lower()
-                        # 确保上下文中包含 'mihomo' 且不包含 'clash.meta'
-                        if 'mihomo' in context and 'clash.meta' not in context:
-                            found_urls.add(url)
-            
-            filtered_urls = []
-            for url in found_urls:
-                url_index = content.find(url)
-                if url_index != -1:
-                    start = max(0, url_index - 200)
-                    end = min(len(content), url_index + len(url) + 200)
-                    context = content[start:end].lower()
-                    # 再次过滤，排除可能被误判的clash.meta链接
-                    if 'clash.meta' in context and 'mihomo' not in context:
-                        self.log_message(f"排除 Clash.meta 链接: {url}")
-                        continue
-                    filtered_urls.append(url)
-            return filtered_urls
-        except Exception as e:
-            self.log_message(f"提取 Mihomo 链接失败: {e}", "ERROR")
-            return []
-
-    def validate_yaml_url(self, url):
-        """
-        通过HEAD请求验证URL是否可访问。
-        """
-        try:
-            # 使用 HEAD 请求，更快且不下载整个文件
-            resp = requests.head(url, timeout=10, allow_redirects=True)
-            return resp.status_code == 200
-        except requests.RequestException:
-            return False
-
-    def save_subscription_url(self, yaml_url: str) -> bool:
-        """
-        修复版本：远程下载 yaml 文件内容，修复乱码并清理代理名称，然后保存为 85LA.yaml
-        """
-        try:
-            # 下载内容
-            resp = requests.get(yaml_url, timeout=15, headers={
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-            })
-            resp.raise_for_status()
-            
-            # 尝试不同的编码方式来解决乱码问题
-            content = None
-            encodings = ['utf-8', 'gbk', 'gb2312', 'big5', 'latin1']
-            
-            for encoding in encodings:
-                try:
-                    resp.encoding = encoding
-                    test_content = resp.text
-                    # 验证内容是否包含有效的YAML结构且不包含过多乱码
-                    if ('proxies:' in test_content or 'proxy-groups:' in test_content):
-                        # 简单检查乱码程度 - 如果包含过多非ASCII字符可能是编码错误
-                        ascii_ratio = sum(1 for c in test_content[:1000] if ord(c) < 128) / min(1000, len(test_content))
-                        if ascii_ratio > 0.6 or encoding == 'utf-8':  # utf-8优先
-                            content = test_content
-                            self.log_message(f"使用 {encoding} 编码解析成功", "INFO")
-                            break
-                except (UnicodeDecodeError, UnicodeError):
-                    continue
-            
-            # 如果所有编码都失败，使用默认处理
-            if not content:
-                content = resp.content.decode('utf-8', errors='replace')
-                self.log_message("使用默认UTF-8编码（替换错误字符）", "WARN")
-            
-            # 保存文件
-            save_path = os.path.join(self.save_path_var.get(), "85LA.yaml")
-            os.makedirs(os.path.dirname(save_path), exist_ok=True)
-            
-            with open(save_path, "w", encoding="utf-8", errors='replace') as f:
-                f.write(content)
-            
-            self.log_message(f"✅ 已下载节点配置到 {save_path}", "SUCCESS")
-            return True
-            
-        except Exception as e:
-            self.log_message(f"❌ 下载处理 yaml 失败：{e}", "ERROR")
-            return False
-
-
 def main():
     """主函数，创建并运行GUI应用程序。"""
     root = tk.Tk()
