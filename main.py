@@ -3,7 +3,6 @@ import tkinter as tk
 
 from src.gui.main_window import MihomoSubscriptionGUI
 
-
 def main():
     """主函数，创建并运行GUI应用程序。"""
     root = tk.Tk()
@@ -13,9 +12,11 @@ def main():
     def on_closing():
         """处理窗口关闭事件，确保程序正常退出。"""
         app.is_running = False
+        
+        # 显式等待搜索线程结束，以确保数据完整性
         if app.search_thread and app.search_thread.is_alive():
-            # 可以在这里添加等待线程结束的逻辑，但daemon线程会自动退出
-            pass
+            app.search_thread.join()  # 加入等待线程
+            
         root.destroy()
 
     root.protocol("WM_DELETE_WINDOW", on_closing)

@@ -1,7 +1,6 @@
 # refactored_mihomo/src/utils/validators.py
 import requests
 
-
 def validate_yaml_url(url):
     """
     通过HEAD请求验证URL是否可访问。

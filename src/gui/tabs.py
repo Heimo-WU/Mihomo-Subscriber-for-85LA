@@ -171,15 +171,15 @@ def create_about_tab(self):
     inner.columnconfigure(0, weight=1)
     
     # 标题
-    title_lbl = tk.Label(inner, text="🛸 Mihomo Subscriber 👾\nVersion 1.0.3",
+    title_lbl = tk.Label(inner, text="🛸 Mihomo Subscriber 👾\nVersion 1.0.4",
                          font=('微软雅黑', 16, 'bold'), bg='#2c3e50', fg='white',
                          justify='center', pady=15)
     title_lbl.grid(row=0, column=0, sticky='ew', pady=(0, 15))
     
     title_lbl.bind('<Button-1>', lambda e: on_title_click(self, e))
-    
-    # 作者信息
-    author_info = tk.LabelFrame(inner, text="👨‍💻 作者信息", font=('微软雅黑', 10, 'bold'),
+
+    # 作者信息 (row=1)
+    author_info = tk.LabelFrame(inner, text="🎅 作者信息", font=('微软雅黑', 10, 'bold'),
                                  bg='#f0f0f0', fg='#2c3e50')
     author_info.grid(row=1, column=0, sticky='ew', padx=20, pady=10)
     author_info.columnconfigure(0, weight=1)
@@ -212,41 +212,75 @@ def create_about_tab(self):
     github_label.pack(side='left')
     github_label.bind('<Button-1>', lambda e: webbrowser.open("https://github.com/Heimo-WU"))
 
-    # 软件信息
-    soft = tk.LabelFrame(inner, text="💻 软件信息", font=('微软雅黑', 10, 'bold'),
-                         bg='#f0f0f0', fg='#2c3e50')
-    soft.grid(row=2, column=0, sticky='ew', padx=20, pady=10)
-    soft.columnconfigure(0, weight=1)
+    # 软件信息 (row=2)
+    intro_frame = tk.LabelFrame(
+        inner,
+        text="💻 软件信息",
+        font=('微软雅黑', 10, 'bold'),
+        bg='#f0f0f0',
+        fg='#2c3e50',
+        relief='groove',
+        bd=2
+    )
+    intro_frame.grid(row=2, column=0, sticky='ew', padx=20, pady=10)
+    intro_frame.columnconfigure(0, weight=1)
 
-    # 重新编排软件信息
-    soft_info_frame = tk.Frame(soft, bg='#f0f0f0')
-    soft_info_frame.grid(row=0, column=0, pady=10, padx=5, sticky='w')
+    # 将所有功能和信息整合到一个多行字符串中
+    intro_text = (
+        "Mihomo Subscriber 是一个半自动化的代理订阅管理工具，它能够\n"
+        "智能搜索、验证并下载最新的免费代理节点订阅，轻松管理代理配置。\n\n"
+        "🚀 主要功能:\n"
+        " • 自动查找最新的免费节点订阅\n"
+        " • 完整的操作记录和错误处理\n"
+        " • 智能过滤和验证订阅链接\n"
+        " • 文件管理和预览功能\n"
+        " • 简洁美观的用户界面\n"
+        " • 隐藏的彩蛋动画"
+    )
 
-    # 功能列表
-    tk.Label(soft_info_frame, text="功能:", font=('微软雅黑', 9, 'bold'), bg='#f0f0f0', fg='#34495e', anchor='w').pack(fill='x')
-    tk.Label(soft_info_frame, text="  • 自动查找最新的免费节点订阅", font=('微软雅黑', 9), bg='#f0f0f0', anchor='w').pack(fill='x')
-    tk.Label(soft_info_frame, text="  • 智能过滤和验证订阅链接", font=('微软雅黑', 9), bg='#f0f0f0', anchor='w').pack(fill='x')
-    tk.Label(soft_info_frame, text="  • 文件管理和预览功能", font=('微软雅黑', 9), bg='#f0f0f0', anchor='w').pack(fill='x')
-    tk.Label(soft_info_frame, text="  • 简洁美观的用户界面", font=('微软雅黑', 9), bg='#f0f0f0', anchor='w').pack(fill='x')
+    # 使用单个tk.Label来显示所有信息
+    tk.Label(
+        intro_frame,
+        text=intro_text,
+        font=('微软雅黑', 9),
+        bg='#f0f0f0',
+        fg="#131618",
+        justify='left',
+        anchor='w',
+        wraplength=600
+    ).pack(fill='x', padx=15, pady=10)
 
-    # 节点来源
-    source_frame = tk.Frame(soft_info_frame, bg='#f0f0f0')
-    source_frame.pack(fill='x', pady=(10, 0))
-    tk.Label(source_frame, text="免费节点来源:", font=('微软雅黑', 9, 'bold'), bg='#f0f0f0', fg='#34495e').pack(side='left', anchor='w')
-    source_lbl = tk.Label(source_frame, text="85LA", font=('微软雅黑', 9),
-                          bg='#f0f0f0', fg='#3498db', cursor='hand2')
-    source_lbl.pack(side='left', anchor='w', padx=(5,0))
-    source_lbl.bind('<Button-1>', lambda e: webbrowser.open("https://www.85la.com/"))
-    
-    # 免责声明
+    # 数据来源 (新嵌入部分，row=3)
+    source_frame = tk.LabelFrame(inner, text="📡 数据来源", font=('微软雅黑', 10, 'bold'),
+                                 bg='#f0f0f0', fg='#2c3e50', relief='groove', bd=2)
+    source_frame.grid(row=3, column=0, sticky='ew', padx=20, pady=10)
+    source_frame.columnconfigure(0, weight=1)
+
+    source_info_frame = tk.Frame(source_frame, bg='#f0f0f0')
+    source_info_frame.pack(fill='x', padx=15, pady=10)
+
+    tk.Label(source_info_frame, text="免费节点来源:", font=('微软雅黑', 9, 'bold'),
+             bg='#f0f0f0', fg='#2c3e50').pack(side='left')
+
+    source_link = tk.Label(source_info_frame, text="85LA (www.85la.com)",
+                           font=('微软雅黑', 9, 'bold'),
+                           bg='#f0f0f0', fg='#3498db', cursor='hand2')
+    source_link.pack(side='left', padx=(10, 0))
+    source_link.bind('<Button-1>', lambda e: webbrowser.open("https://www.85la.com/"))
+
+    tk.Label(source_frame, text="感谢 85LA 提供的免费节点服务！", font=('微软雅黑', 9),
+             bg='#f0f0f0', fg='#2c3e50').pack(padx=15, pady=(0, 10))
+
+    # 免责声明 (row=4)
     warn = tk.LabelFrame(inner, text="⚠️ 免责声明", font=('微软雅黑', 10, 'bold'),
                          bg='#f0f0f0', fg='#e74c3c')
-    warn.grid(row=3, column=0, sticky='ew', padx=20, pady=10)
+    warn.grid(row=4, column=0, sticky='ew', padx=20, pady=10)
     warn.columnconfigure(0, weight=1)
 
     disclaimer = ("本软件仅供学习和研究使用，请遵守当地法律法规。\n"
                   "使用本软件所产生的任何后果由用户自行承担，作者不承担任何责任。\n"
                   "请合理使用网络资源，尊重服务提供商的服务条款。")
+    
     tk.Label(warn, text=disclaimer, font=('微软雅黑', 9), bg='#f0f0f0', fg='#e74c3c',
              justify='left', wraplength=480,
              anchor='w').grid(row=0, column=0, pady=10, sticky='w')
